@@ -203,7 +203,17 @@ SHRINE_PIXEL shrine_pixels[] = {
     {.coord = {25, 15}, .data = '@'}, {.coord = {26, 15}, .data = '@'}};
 int total_pixels = sizeof(shrine_pixels) / sizeof(shrine_pixels[0]);
 
-int colide(int x, int y, DISMANTLE dismantle) { return 0; }
+int colide(int x, int y, DISMANTLE dismantle) {
+  int epsilon = 2;
+  float k = ((float)(dismantle.l.start.y - dismantle.l.end.y)) /
+            ((dismantle.l.start.x - dismantle.l.end.x));
+  int b = dismantle.l.start.y - k * dismantle.l.start.x;
+  if (x > dismantle.l.start.x - epsilon && x < dismantle.l.end.x + epsilon &&
+      y > (k * x + b - epsilon) && y < (k * x + b + epsilon)) {
+    return 1;
+  }
+  return 0;
+}
 
 int update(int *shrine_x, int *shrine_y, int *dismantles, DISMANTLE *dism,
            int w, int h) {
@@ -223,6 +233,7 @@ int update(int *shrine_x, int *shrine_y, int *dismantles, DISMANTLE *dism,
       for (int d = 0; d < (*dismantles); ++d) {
         int c = colide(x, y, dism[d]);
         if (c > 0) {
+          //
           printf("\033[%d;%dH", y + 1, x + 1);
           char sumb;
           switch (c) {
@@ -234,6 +245,8 @@ int update(int *shrine_x, int *shrine_y, int *dismantles, DISMANTLE *dism,
             break;
           }
           printf("%c", sumb);
+          break;
+          //
         }
       }
     }

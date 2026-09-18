@@ -1,44 +1,20 @@
-#include <stdio.h>
+#include <ncurses.h>
 #include <stdlib.h>
+#include <time.h>
 
 #ifdef _WIN32
-#define CLEAR "cls"
+
 #include <windows.h>
 #define SLEEP_MS(ms) Sleep(ms)
 
-void get_console_size(int *cols, int *rows) {
-  HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-  CONSOLE_SCREEN_BUFFER_INFO csbi;
-  if (GetConsoleScreenBufferInfo(hConsole, &csbi)) {
-    *cols = csbi.srWindow.Right - csbi.srWindow.Left + 1;
-    *rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
-  } else {
-    *cols = 80;
-    *rows = 25;
-  }
-}
-
 #else
-#define CLEAR "clear"
+
 #include <unistd.h>
 #define SLEEP_MS(ms) usleep((ms) * 1000)
-#include <sys/ioctl.h>
 
-void get_console_size(int *cols, int *rows) {
-  struct winsize w;
-  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0) {
-    *cols = w.ws_col;
-    *rows = w.ws_row;
-  } else {
-    char *c = getenv("COLUMNS");
-    char *r = getenv("LINES");
-    *cols = c ? atoi(c) : 80;
-    *rows = r ? atoi(r) : 25;
-  }
-}
 #endif
 
-#define MAX_DISM 100
+#define MAX_DISM 50
 
 typedef struct {
   int x;
@@ -59,6 +35,14 @@ typedef struct {
   Line l;
   int anim;
 } DISMANTLE;
+
+void Init_dism(DISMANTLE *d, int p1_x, int p1_y, int p2_x, int p2_y, int anim) {
+  (*d).anim = anim;
+  (*d).l.start.x = p1_x;
+  (*d).l.start.y = p1_y;
+  (*d).l.end.x = p2_x;
+  (*d).l.end.y = p2_y;
+}
 
 SHRINE_PIXEL shrine_pixels[] = {
     {.coord = {11, 0}, .data = '\\'}, {.coord = {14, 0}, .data = '^'},
@@ -202,13 +186,32 @@ SHRINE_PIXEL shrine_pixels[] = {
     {.coord = {23, 15}, .data = '@'}, {.coord = {24, 15}, .data = '@'},
     {.coord = {25, 15}, .data = '@'}, {.coord = {26, 15}, .data = '@'}};
 int total_pixels = sizeof(shrine_pixels) / sizeof(shrine_pixels[0]);
+int WIDTH, HEIGHT;
 
 int colide(int x, int y, DISMANTLE dismantle) {
-  int epsilon = 2;
+  int epsilon = 1;
+  if ((x - dismantle.l.start.x) * (x - dismantle.l.start.x) +
+              (y - dismantle.l.start.y) * (y - dismantle.l.start.y) <
+          epsilon * epsilon ||
+      (x - dismantle.l.end.x) * (x - dismantle.l.end.x) +
+              (y - dismantle.l.end.y) * (y - dismantle.l.end.y) <
+          epsilon * epsilon) {
+    return 1;
+  }
+
+  if (dismantle.l.start.x - dismantle.l.end.x == 0) {
+    if (x > dismantle.l.start.x - epsilon && x < dismantle.l.end.x + epsilon &&
+        y > dismantle.l.start.y - epsilon && y < dismantle.l.end.y + epsilon) {
+      return 1;
+    }
+    return 0;
+  }
+
   float k = ((float)(dismantle.l.start.y - dismantle.l.end.y)) /
             ((dismantle.l.start.x - dismantle.l.end.x));
   int b = dismantle.l.start.y - k * dismantle.l.start.x;
-  if (x > dismantle.l.start.x - epsilon && x < dismantle.l.end.x + epsilon &&
+
+  if (x > dismantle.l.start.x && x < dismantle.l.end.x &&
       y > (k * x + b - epsilon) && y < (k * x + b + epsilon)) {
     return 1;
   }
@@ -219,22 +222,23 @@ int update(int *shrine_x, int *shrine_y, int *dismantles, DISMANTLE *dism,
            int w, int h) {
   int delay_ms = 50;
 
+  erase();
+  refresh();
+
   for (int i = 0; i < total_pixels; i++) {
     int x = *shrine_x + shrine_pixels[i].coord.x;
     int y = *shrine_y + shrine_pixels[i].coord.y;
     if (x >= 0 && x < w && y >= 0 && y < h) {
-      printf("\033[%d;%dH", y + 1, x + 1);
-      printf("%c", shrine_pixels[i].data);
+      mvprintw(y, x, "%c", shrine_pixels[i].data);
     }
   }
 
-  for (int y = 0; y < h; y++) {
-    for (int x = 0; x < w; x++) {
+  for (int y = 0; y < HEIGHT; ++y) {
+    for (int x = 0; x < WIDTH; ++x) {
       for (int d = 0; d < (*dismantles); ++d) {
         int c = colide(x, y, dism[d]);
         if (c > 0) {
           //
-          printf("\033[%d;%dH", y + 1, x + 1);
           char sumb;
           switch (c) {
           case 1:
@@ -244,7 +248,7 @@ int update(int *shrine_x, int *shrine_y, int *dismantles, DISMANTLE *dism,
             sumb = '@';
             break;
           }
-          printf("%c", sumb);
+          mvprintw(y, x, "%c", sumb);
           break;
           //
         }
@@ -252,30 +256,35 @@ int update(int *shrine_x, int *shrine_y, int *dismantles, DISMANTLE *dism,
     }
   }
 
-  SLEEP_MS(delay_ms);
+  for (int d = 0; d < (*dismantles); ++d) {
+    if (dism[d].anim > 0) {
+      --dism[d].anim;
+    } else {
+      Init_dism(&(dism[d]), rand() % WIDTH, rand() % HEIGHT, rand() % WIDTH,
+                rand() % HEIGHT, rand() % 3 + 1);
+    }
+  }
+
   if ((*shrine_y) > h / 2) {
     (*shrine_y) -= 1;
-  } else {
-    dismantles++;
-    return 0;
+  } else if ((*dismantles) + 1 < MAX_DISM && rand() % 20 == 0) {
+    (*dismantles)++;
   }
-  system(CLEAR);
+
+  refresh();
+  SLEEP_MS(delay_ms);
   return 1;
 }
 
-void Init_dism(DISMANTLE *d, int p1_x, int p1_y, int p2_x, int p2_y) {
-  (*d).anim = 0;
-  (*d).l.start.x = p1_x;
-  (*d).l.start.y = p1_y;
-  (*d).l.end.x = p2_x;
-  (*d).l.end.y = p2_y;
-}
-
 int main() {
-  int WIDTH, HEIGHT;
-  get_console_size(&WIDTH, &HEIGHT);
+  srand((size_t)time(NULL));
 
-  system(CLEAR);
+  initscr();
+  noecho();
+  cbreak();
+  curs_set(0);
+
+  getmaxyx(stdscr, HEIGHT, WIDTH);
 
   int shrine_x = WIDTH / 2 - 15;
   int shrine_y = HEIGHT;
@@ -283,7 +292,7 @@ int main() {
   DISMANTLE *dism;
   dism = (DISMANTLE *)malloc(MAX_DISM * sizeof(DISMANTLE));
   for (int d = 0; d < MAX_DISM; ++d) {
-    Init_dism(&(dism[d]), 0, 0, 0, 0);
+    Init_dism(&(dism[d]), 0, 0, 0, 0, 0);
   }
 
   int prog = 1;
@@ -291,5 +300,6 @@ int main() {
     prog = update(&shrine_x, &shrine_y, &dismantles, dism, WIDTH, HEIGHT);
   }
 
+  endwin();
   return 0;
 }

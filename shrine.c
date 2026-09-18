@@ -189,19 +189,42 @@ int total_pixels = sizeof(shrine_pixels) / sizeof(shrine_pixels[0]);
 int WIDTH, HEIGHT;
 
 int colide(int x, int y, DISMANTLE dismantle) {
-  int epsilon = 1;
-  if ((x - dismantle.l.start.x) * (x - dismantle.l.start.x) +
-              (y - dismantle.l.start.y) * (y - dismantle.l.start.y) <
+  float epsilon = 0.5;
+  float epsilon_2 = 0.2;
+
+  if (dismantle.anim < 4 && dismantle.anim >= 2) {
+    epsilon *= 2;
+  }
+
+  if ((float)((x - dismantle.l.start.x) * (x - dismantle.l.start.x) +
+              (y - dismantle.l.start.y) * (y - dismantle.l.start.y)) <=
           epsilon * epsilon ||
-      (x - dismantle.l.end.x) * (x - dismantle.l.end.x) +
-              (y - dismantle.l.end.y) * (y - dismantle.l.end.y) <
+      (float)((x - dismantle.l.end.x) * (x - dismantle.l.end.x) +
+              (y - dismantle.l.end.y) * (y - dismantle.l.end.y)) <=
           epsilon * epsilon) {
+    if (dismantle.anim >= 3 &&
+        ((float)((x - dismantle.l.start.x) * (x - dismantle.l.start.x) +
+                 (y - dismantle.l.start.y) * (y - dismantle.l.start.y)) <=
+             epsilon_2 * epsilon_2 ||
+         (float)((x - dismantle.l.end.x) * (x - dismantle.l.end.x) +
+                 (y - dismantle.l.end.y) * (y - dismantle.l.end.y)) <=
+             epsilon_2 * epsilon_2)) {
+      return 2;
+    }
     return 1;
   }
 
   if (dismantle.l.start.x - dismantle.l.end.x == 0) {
-    if (x > dismantle.l.start.x - epsilon && x < dismantle.l.end.x + epsilon &&
-        y > dismantle.l.start.y - epsilon && y < dismantle.l.end.y + epsilon) {
+    if (x >= dismantle.l.start.x - epsilon &&
+        x <= dismantle.l.end.x + epsilon &&
+        y >= dismantle.l.start.y - epsilon &&
+        y <= dismantle.l.end.y + epsilon) {
+      if (dismantle.anim >= 3 && x >= dismantle.l.start.x - epsilon_2 &&
+          x <= dismantle.l.end.x + epsilon_2 &&
+          y >= dismantle.l.start.y - epsilon_2 &&
+          y <= dismantle.l.end.y + epsilon_2) {
+        return 2;
+      }
       return 1;
     }
     return 0;
@@ -212,7 +235,13 @@ int colide(int x, int y, DISMANTLE dismantle) {
   int b = dismantle.l.start.y - k * dismantle.l.start.x;
 
   if (x > dismantle.l.start.x && x < dismantle.l.end.x &&
-      y > (k * x + b - epsilon) && y < (k * x + b + epsilon)) {
+      (float)y > ((float)(k * x + b) - epsilon) &&
+      (float)y < ((float)(k * x + b) + epsilon)) {
+    if (dismantle.anim >= 3 && x > dismantle.l.start.x &&
+        x < dismantle.l.end.x && (float)y > ((float)(k * x + b) - epsilon_2) &&
+        (float)y < ((float)(k * x + b) + epsilon_2)) {
+      return 2;
+    }
     return 1;
   }
   return 0;
@@ -220,7 +249,7 @@ int colide(int x, int y, DISMANTLE dismantle) {
 
 int update(int *shrine_x, int *shrine_y, int *dismantles, DISMANTLE *dism,
            int w, int h) {
-  int delay_ms = 50;
+  int delay_ms = 70;
 
   erase();
   refresh();
@@ -242,10 +271,10 @@ int update(int *shrine_x, int *shrine_y, int *dismantles, DISMANTLE *dism,
           char sumb;
           switch (c) {
           case 1:
-            sumb = '.';
+            sumb = '`';
             break;
           case 2:
-            sumb = '@';
+            sumb = '*';
             break;
           }
           mvprintw(y, x, "%c", sumb);
@@ -261,7 +290,7 @@ int update(int *shrine_x, int *shrine_y, int *dismantles, DISMANTLE *dism,
       --dism[d].anim;
     } else {
       Init_dism(&(dism[d]), rand() % WIDTH, rand() % HEIGHT, rand() % WIDTH,
-                rand() % HEIGHT, rand() % 3 + 1);
+                rand() % HEIGHT, rand() % 6 + 1);
     }
   }
 

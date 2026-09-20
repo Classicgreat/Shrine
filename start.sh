@@ -29,9 +29,9 @@ bsd() {
 file="shrine.c"
 
 while true; do
-    hx "$file"
+    # hx "$file"
 
-    bsd "$file"
+    bsd "$file" -lncurses
 
     read -p "Open file again (Y/n): " inp
     case "$inp" in
